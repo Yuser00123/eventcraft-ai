@@ -1,0 +1,28 @@
+# Dependencies
+/node_modules
+
+# Next.js build output
+/.next
+/out
+
+# Production
+/build
+
+# Environment — never commit secrets
+.env
+.env.local
+.env*.local
+
+# Testing
+/coverage
+
+# Misc
+.DS_Store
+*.pem
+.vscode/
+.idea/
+*.tsbuildinfo
+next-env.d.ts
+
+# Playwright CLI artifacts
+.playwright-cli/
