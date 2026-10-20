@@ -21,7 +21,7 @@ Three engineering choices I'm proud of:
 
 3️⃣ Security by subtraction — no database, no auth, data stays in the browser; the Gemini key lives only in server route handlers behind rate limiting and strict security headers.
 
-40 tests passing, full accessibility pass (ARIA tablist, live regions, reduced-motion, jest-axe), and a warm editorial UI built with Next.js, TypeScript and Tailwind CSS.
+42 tests passing, full accessibility pass (ARIA tablist, live regions, reduced-motion, jest-axe), and a warm editorial UI built with Next.js, TypeScript and Tailwind CSS.
 
 Biggest lesson: reliable AI products aren't built on clever prompts alone — they're built on contracts.
 

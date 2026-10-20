@@ -102,10 +102,7 @@ export async function regenerateIdeas(request: IdeasRequest): Promise<IdeasReply
 /** Grounded planning-assistant reply using the live plan as context. */
 export async function chatReply(request: ChatRequest): Promise<ChatReply> {
   if (!isGeminiConfigured()) {
-    return {
-      reply:
-        "The live assistant requires GEMINI_API_KEY on the server. Meanwhile, compare over-budget categories against your contingency reserve, and ask vendors for itemized quotes before cutting scope.",
-    };
+    return { reply: offlineChatReply(request) };
   }
   try {
     const reply = await generateText({
@@ -117,6 +114,27 @@ export async function chatReply(request: ChatRequest): Promise<ChatReply> {
     return chatReplySchema.parse({ reply });
   } catch (error) {
     logAiFailure("chatReply", error);
-    throw new Error("ASSISTANT_UNAVAILABLE");
+    // Match the rest of the app: never leave the user facing a dead endpoint.
+    return { reply: offlineChatReply(request) };
   }
+}
+
+/** Deterministic, plan-aware reply used in demo mode or after a model failure. */
+function offlineChatReply(request: ChatRequest): string {
+  const overBudget = request.plan.budget.categories.filter(
+    (category) => category.actualAmount > category.estimatedAmount,
+  );
+  const overBudgetText =
+    overBudget.length > 0
+      ? ` You are currently over estimate on ${overBudget
+          .map((category) => category.name)
+          .join(", ")} — request itemized quotes there before cutting scope elsewhere.`
+      : "";
+  return [
+    "Live AI assistance is unavailable right now, so here is plan-based guidance.",
+    overBudgetText,
+    ` Compare the remaining categories against your ${request.plan.budget.contingencyAmount} contingency reserve, prioritize high-priority open checklist tasks first, and ask vendors for fixed quotes with cancellation terms in writing.`,
+  ]
+    .filter(Boolean)
+    .join("");
 }

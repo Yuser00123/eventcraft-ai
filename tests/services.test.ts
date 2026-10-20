@@ -108,4 +108,31 @@ describe("planning services", () => {
     });
     expect(reply.reply).toContain("dessert");
   });
+
+  it("falls back to plan-aware guidance when the chat model fails", async () => {
+    isGeminiConfigured.mockReturnValue(true);
+    const input = brief();
+    const plan = buildDemoPlan(input);
+    generateText.mockRejectedValue(new Error("auth error"));
+    const reply = await chatReply({
+      brief: input,
+      plan,
+      messages: [{ role: "user", content: "Help me with my budget" }],
+    });
+    expect(reply.reply).toContain("contingency");
+  });
+
+  it("names over-budget categories in the offline reply", async () => {
+    isGeminiConfigured.mockReturnValue(false);
+    const input = brief();
+    const plan = buildDemoPlan(input);
+    plan.budget.categories[0]!.actualAmount =
+      plan.budget.categories[0]!.estimatedAmount + 1000;
+    const reply = await chatReply({
+      brief: input,
+      plan,
+      messages: [{ role: "user", content: "Where am I overspending?" }],
+    });
+    expect(reply.reply).toContain(plan.budget.categories[0]!.name);
+  });
 });
