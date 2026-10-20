@@ -12,7 +12,7 @@ Turn a one-minute event brief into a complete **budget, dated timeline, vendor c
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript)
 ![Gemini](https://img.shields.io/badge/Google-Gemini-FF9800?logo=googlegemini&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)
-![Vitest](https://img.shields.io/badge/tests-34%20passing-4E9A51?logo=vitest)
+![Vitest](https://img.shields.io/badge/tests-40%20passing-4E9A51?logo=vitest)
 ![License](https://img.shields.io/badge/license-MIT-6E5A4E)
 
 **PromptWars Virtual · Challenge 5 — Celebration & Event Planner**
@@ -88,7 +88,8 @@ React state → typed localStorage → six dashboard views
 - **Server-only secrets** — route handlers keep the Gemini key off the client.
 - **No database, no auth** — the plan lives in `localStorage`, eliminating an entire attack surface and enabling instant, offline-capable loads.
 - **Hand-built SVG visuals** — progress rings and bars with zero chart-library weight; planner route ships ~170 kB first-load JS.
-- **Graceful degradation** — model failures fall back to a coherent deterministic plan instead of an error screen.
+- **Defensive AI pipeline** — a normalization layer repairs real-world model deviations (enum casing, missing ids, stringified numbers, envelope-wrapped or fence-wrapped JSON, object-shaped tips) before the strict Zod contract runs; each model call has an abort timeout and one automatic retry.
+- **Graceful degradation** — if every attempt fails, a coherent deterministic plan is returned and honestly labelled as demo output instead of showing an error screen.
 
 ---
 
@@ -120,7 +121,7 @@ npm run dev
 | `npm run dev` | Development server |
 | `npm run build` | Production build with type-check + lint |
 | `npm start` | Serve the production build |
-| `npm test` | Run the 34-test Vitest suite |
+| `npm test` | Run the 40-test Vitest suite |
 | `npm run test:coverage` | Coverage report |
 | `npm run lint` | ESLint (Next.js core-web-vitals + strict TS rules) |
 
@@ -156,7 +157,7 @@ eventcraft-ai/
 │   ├── timeline.ts           # Pure date-offset math
 │   ├── storage.ts            # Typed localStorage layer
 │   └── rate-limit.ts         # Sliding-window limiter
-├── tests/                    # 34 Vitest tests (unit, service, a11y)
+├── tests/                    # 40 Vitest tests (unit, service, a11y)
 └── docs/                     # Problem statement, architecture, prompt log
 ```
 
@@ -187,7 +188,7 @@ Every clause of the official brief maps to a feature, a code location and a test
 | **Problem Statement Alignment (High)** | Traceability matrix above; all three event types diverge in output; all five mandated artifacts are interactive features; one-click sample event for judges |
 | **Security (Medium)** | Server-only API key; Zod validation on request **and** model response; CSP/HSTS/X-Frame/nosniff headers (`next.config.ts`); sliding-window rate limiting; no `dangerouslySetInnerHTML`; generic error envelopes |
 | **Efficiency (Medium)** | One model call per plan; localStorage caching makes repeat visits network-free; hand-built SVG charts; route-level code splitting; self-hosted fonts |
-| **Testing (Low)** | 34 tests across pure logic, schema contracts, storage, rate limiting, mocked AI services and a `jest-axe` accessibility test |
+| **Testing (Low)** | 40 tests across pure logic, schema contracts, storage, rate limiting, mocked AI services and a `jest-axe` accessibility test |
 | **Accessibility (Low)** | Semantic landmarks & skip link; labelled fields with inline errors; ARIA tablist with keyboard navigation; live regions for status; visible focus; AA-checked contrast; `prefers-reduced-motion` support; 44px targets |
 
 ---
@@ -197,7 +198,7 @@ Every clause of the official brief maps to a feature, a code location and a test
 ```bash
 npm test
 # Test Files  7 passed (7)
-# Tests       34 passed (34)
+# Tests       40 passed (40)
 ```
 
 Coverage spans budget arithmetic, date math, Zod contracts (including

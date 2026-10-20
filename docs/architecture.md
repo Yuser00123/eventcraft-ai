@@ -37,6 +37,16 @@ checklist and idea objects. The UI never parses free text, so a wording
 change in the model cannot break rendering. Every response is then re-parsed
 with Zod — trust nothing, validate twice.
 
+### 2b. Defensive normalization before validation
+`lib/ai-normalize.ts` sits between the model and the Zod contract. Real
+generations deviate in predictable ways — uppercase enums, missing ids,
+stringified numbers, object-shaped risk tips, markdown fences or an envelope
+key wrapping the plan. Each section is coerced and repaired independently,
+short sections are backfilled from the demo engine (with dates attached), and
+a payload with no usable model section throws so the retry/demo path labels
+the output honestly. Every model call additionally carries an
+`AbortSignal.timeout` so two retries stay inside the serverless limit.
+
 ### 3. Deterministic demo/fallback engine
 `lib/demo-plan.ts` builds a complete, coherent plan from the user's real
 inputs when no API key is configured or when a model call fails. The UI
