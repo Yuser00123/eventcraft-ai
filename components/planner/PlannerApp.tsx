@@ -56,11 +56,20 @@ export function PlannerApp({ prefillSample }: PlannerAppProps) {
     setStatus("loading");
     setErrorMessage("");
     try {
-      const response = await fetch("/api/generate-plan", {
+      // One client-side retry absorbs cold starts and transient 5xx/network errors.
+      let response = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(brief),
       });
+      if (response.status >= 500 || response.status === 429) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        response = await fetch("/api/generate-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(brief),
+        });
+      }
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error ?? "Plan generation failed.");

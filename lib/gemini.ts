@@ -32,6 +32,7 @@ interface JsonCallArgs {
   responseSchema: Schema;
   temperature: number;
   maxOutputTokens?: number;
+  timeoutMs?: number;
 }
 
 /** Call Gemini in constrained JSON mode and parse the typed payload. */
@@ -41,6 +42,7 @@ export async function generateJson<T>({
   responseSchema,
   temperature,
   maxOutputTokens,
+  timeoutMs,
 }: JsonCallArgs): Promise<T> {
   const client = getGeminiClient();
   const response = await client.models.generateContent({
@@ -51,6 +53,7 @@ export async function generateJson<T>({
       responseSchema,
       temperature,
       maxOutputTokens,
+      abortSignal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
       systemInstruction,
     },
   });
@@ -74,6 +77,7 @@ interface TextCallArgs {
   systemInstruction: string;
   prompt: string;
   temperature?: number;
+  timeoutMs?: number;
 }
 
 /** Free-text call used by the planning assistant chat. */
@@ -81,12 +85,17 @@ export async function generateText({
   systemInstruction,
   prompt,
   temperature = 0.5,
+  timeoutMs,
 }: TextCallArgs): Promise<string> {
   const client = getGeminiClient();
   const response = await client.models.generateContent({
     model: geminiModel(),
     contents: prompt,
-    config: { temperature, systemInstruction },
+    config: {
+      temperature,
+      abortSignal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
+      systemInstruction,
+    },
   });
   const text = response.text?.trim();
   if (!text) {

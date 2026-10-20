@@ -54,6 +54,8 @@ async function attemptPlanGeneration(brief: EventBrief): Promise<EventPlan> {
     responseSchema: planResponseSchema,
     temperature: 0.4,
     maxOutputTokens: 8192,
+    // Two 25s attempts stay within the 60s serverless function limit.
+    timeoutMs: 25_000,
   });
   return normalizeAiPlan(raw, brief);
 }
@@ -88,6 +90,7 @@ export async function regenerateIdeas(request: IdeasRequest): Promise<IdeasReply
       responseSchema: ideasResponseSchema,
       temperature: 0.9,
       maxOutputTokens: 4096,
+      timeoutMs: 20_000,
     });
     return normalizeIdeasReply(raw, request.brief);
   } catch (error) {
@@ -109,6 +112,7 @@ export async function chatReply(request: ChatRequest): Promise<ChatReply> {
       systemInstruction: buildChatSystemInstruction(request),
       prompt: buildChatPrompt(request.messages),
       temperature: 0.5,
+      timeoutMs: 20_000,
     });
     return chatReplySchema.parse({ reply });
   } catch (error) {
