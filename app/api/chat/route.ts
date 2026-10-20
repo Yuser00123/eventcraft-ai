@@ -5,6 +5,9 @@ import { chatReply } from "@/lib/services";
 
 const limiter = new RateLimiter(15, 60_000);
 
+export const maxDuration = 30;
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request): Promise<NextResponse> {
   if (!limiter.allow(clientKey(request.headers))) {
     return NextResponse.json(

@@ -31,6 +31,7 @@ interface JsonCallArgs {
   prompt: string;
   responseSchema: Schema;
   temperature: number;
+  maxOutputTokens?: number;
 }
 
 /** Call Gemini in constrained JSON mode and parse the typed payload. */
@@ -39,6 +40,7 @@ export async function generateJson<T>({
   prompt,
   responseSchema,
   temperature,
+  maxOutputTokens,
 }: JsonCallArgs): Promise<T> {
   const client = getGeminiClient();
   const response = await client.models.generateContent({
@@ -48,6 +50,7 @@ export async function generateJson<T>({
       responseMimeType: "application/json",
       responseSchema,
       temperature,
+      maxOutputTokens,
       systemInstruction,
     },
   });

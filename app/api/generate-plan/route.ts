@@ -6,6 +6,10 @@ import { generatePlan } from "@/lib/services";
 /** One full plan generation is an expensive call — throttle generously. */
 const limiter = new RateLimiter(8, 60_000);
 
+// Give large structured generations headroom on serverless infrastructure.
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request): Promise<NextResponse> {
   if (!limiter.allow(clientKey(request.headers))) {
     return NextResponse.json(

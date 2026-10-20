@@ -1,7 +1,5 @@
 import {
   chatReplySchema,
-  eventPlanSchema,
-  ideasReplySchema,
   type ChatReply,
   type ChatRequest,
   type EventBrief,
@@ -21,6 +19,7 @@ import {
 } from "@/lib/prompts";
 import { enrichMilestones, enrichTasks } from "@/lib/timeline";
 import { buildDemoPlan } from "@/lib/demo-plan";
+import { normalizeAiPlan, normalizeIdeasReply } from "@/lib/ai-normalize";
 
 /**
  * Service layer — the only place API routes meet AI logic.
@@ -34,44 +33,7 @@ function logAiFailure(scope: string, error: unknown): void {
   console.error(`[eventcraft] ${scope} failed: ${message}`);
 }
 
-/** Add real calendar dates to model output and validate the full contract. */
-function validateAiPlan(raw: unknown, eventDate: string): EventPlan {
-  const candidate = raw as Record<string, unknown>;
-  const withDates = {
-    ...candidate,
-    source: "gemini" as const,
-    generatedAt: new Date().toISOString(),
-    timeline: enrichMilestones(
-      (candidate.timeline as EventPlan["timeline"]) ?? [],
-      eventDate,
-    ),
-    checklist: enrichTasks(
-      (candidate.checklist as EventPlan["checklist"]) ?? [],
-      eventDate,
-    ),
-  };
-  return eventPlanSchema.parse(withDates);
-}
-
-/** Generate the full master plan; falls back to the deterministic demo. */
-export async function generatePlan(brief: EventBrief): Promise<EventPlan> {
-  if (!isGeminiConfigured()) {
-    return withDemoDates(buildDemoPlan(brief), brief.eventDate);
-  }
-  try {
-    const raw = await generateJson<unknown>({
-      systemInstruction: PLAN_SYSTEM_INSTRUCTION,
-      prompt: buildPlanPrompt(brief),
-      responseSchema: planResponseSchema,
-      temperature: 0.4,
-    });
-    return validateAiPlan(raw, brief.eventDate);
-  } catch (error) {
-    logAiFailure("generatePlan", error);
-    return withDemoDates(buildDemoPlan(brief), brief.eventDate);
-  }
-}
-
+/** Attach calendar dates to the deterministic demo plan. */
 function withDemoDates(plan: EventPlan, eventDate: string): EventPlan {
   return {
     ...plan,
@@ -80,10 +42,42 @@ function withDemoDates(plan: EventPlan, eventDate: string): EventPlan {
   };
 }
 
+/**
+ * One live generation attempt. The normalizer repairs messy model output
+ * (enum casing, missing ids, object-shaped tips) before the strict Zod
+ * contract runs, so partial deviations never waste a whole generation.
+ */
+async function attemptPlanGeneration(brief: EventBrief): Promise<EventPlan> {
+  const raw = await generateJson<unknown>({
+    systemInstruction: PLAN_SYSTEM_INSTRUCTION,
+    prompt: buildPlanPrompt(brief),
+    responseSchema: planResponseSchema,
+    temperature: 0.4,
+    maxOutputTokens: 8192,
+  });
+  return normalizeAiPlan(raw, brief);
+}
+
+/** Generate the full master plan; retry once, then fall back to demo. */
+export async function generatePlan(brief: EventBrief): Promise<EventPlan> {
+  if (!isGeminiConfigured()) {
+    return withDemoDates(buildDemoPlan(brief), brief.eventDate);
+  }
+  try {
+    return await attemptPlanGeneration(brief);
+  } catch (firstError) {
+    logAiFailure("generatePlan (attempt 1)", firstError);
+    try {
+      return await attemptPlanGeneration(brief);
+    } catch (secondError) {
+      logAiFailure("generatePlan (attempt 2)", secondError);
+      return withDemoDates(buildDemoPlan(brief), brief.eventDate);
+    }
+  }
+}
+
 /** Regenerate a fresh batch of personalized idea cards. */
-export async function regenerateIdeas(
-  request: IdeasRequest,
-): Promise<IdeasReply> {
+export async function regenerateIdeas(request: IdeasRequest): Promise<IdeasReply> {
   if (!isGeminiConfigured()) {
     return { ideas: buildDemoPlan(request.brief).ideas };
   }
@@ -93,8 +87,9 @@ export async function regenerateIdeas(
       prompt: buildIdeasPrompt(request.brief, request.focus),
       responseSchema: ideasResponseSchema,
       temperature: 0.9,
+      maxOutputTokens: 4096,
     });
-    return ideasReplySchema.parse(raw);
+    return normalizeIdeasReply(raw, request.brief);
   } catch (error) {
     logAiFailure("regenerateIdeas", error);
     return { ideas: buildDemoPlan(request.brief).ideas };
