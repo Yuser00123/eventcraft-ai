@@ -93,23 +93,58 @@ describe("normalizeAiPlan", () => {
     expect(plan.riskTips[0]).toBe("Get receipts for every deposit");
   });
 
-  it("backfills sections that are missing or too short from the demo engine", () => {
+  it("backfills only the missing sections while keeping live ones, with dates attached", () => {
     const plan = normalizeAiPlan(
-      { summary: "Short but valid summary text here.", budget: {}, timeline: [], checklist: [], ideas: [], riskTips: [] },
+      {
+        summary: "Short but valid summary text here.",
+        budget: {
+          categories: [
+            { id: "b1", name: "Venue", estimatedAmount: 100_000 },
+            { id: "b2", name: "Food", estimatedAmount: 120_000 },
+            { id: "b3", name: "Decor", estimatedAmount: 50_000 },
+            { id: "b4", name: "Music", estimatedAmount: 30_000 },
+          ],
+          contingencyAmount: 20_000,
+        },
+        ideas: [
+          { id: "i1", title: "Lantern aisle", description: "Warm lighting", category: "decor", tags: [] },
+          { id: "i2", title: "Photo corner", description: "Polaroid wall", category: "theme", tags: [] },
+          { id: "i3", title: "Dance-off", description: "Guest activity", category: "activity", tags: [] },
+          { id: "i4", title: "Handwritten notes", description: "Personal touch", category: "personal", tags: [] },
+        ],
+        timeline: [], // backfilled
+        checklist: [], // backfilled
+        riskTips: [], // backfilled
+      },
       brief(),
     );
-    expect(plan.budget.categories.length).toBeGreaterThanOrEqual(4);
-    expect(plan.timeline.length).toBeGreaterThanOrEqual(5);
-    expect(plan.checklist.length).toBeGreaterThanOrEqual(8);
-    expect(plan.ideas.length).toBeGreaterThanOrEqual(4);
-    expect(plan.riskTips.length).toBeGreaterThanOrEqual(3);
     expect(plan.source).toBe("gemini");
+    expect(plan.budget.categories[0]?.name).toBe("Venue"); // live section kept
+    expect(plan.ideas[0]?.title).toBe("Lantern aisle");
+    expect(plan.timeline.length).toBeGreaterThanOrEqual(5); // backfilled
+    expect(plan.checklist.length).toBeGreaterThanOrEqual(8);
+    expect(plan.riskTips.length).toBeGreaterThanOrEqual(3);
+    expect(plan.timeline.every((m) => Boolean(m.dueDate))).toBe(true); // dated backfill
+    expect(plan.checklist.every((t) => Boolean(t.dueDate))).toBe(true);
   });
 
-  it("never throws on garbage input", () => {
-    expect(() => normalizeAiPlan(null, brief())).not.toThrow();
-    expect(() => normalizeAiPlan("nope", brief())).not.toThrow();
-    expect(() => normalizeAiPlan(42, brief())).not.toThrow();
+  it("throws when the model contributes no usable section so callers can retry/fallback", () => {
+    expect(() => normalizeAiPlan(null, brief())).toThrow();
+    expect(() => normalizeAiPlan("nope", brief())).toThrow();
+    expect(() =>
+      normalizeAiPlan(
+        { summary: "Short but valid summary text here.", budget: {}, timeline: [], checklist: [], ideas: [], riskTips: [] },
+        brief(),
+      ),
+    ).toThrow();
+  });
+
+  it("unwraps plans nested inside an envelope key", () => {
+    const inner = messyPayload();
+    const plan = normalizeAiPlan({ plan: inner }, brief());
+    expect(plan.source).toBe("gemini");
+    expect(plan.budget.categories).toHaveLength(4);
+    expect(plan.checklist[0]?.priority).toBe("high");
   });
 
   it("clamps dangerous offsets and drops negative-number categories", () => {

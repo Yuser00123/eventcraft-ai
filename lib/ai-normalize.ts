@@ -10,7 +10,7 @@ import {
   type Milestone,
   type Priority,
 } from "@/lib/schemas";
-import { resolveDueDate } from "@/lib/timeline";
+import { enrichMilestones, enrichTasks, resolveDueDate } from "@/lib/timeline";
 import { buildDemoPlan } from "@/lib/demo-plan";
 
 /**
@@ -146,6 +146,22 @@ export function normalizeIdea(raw: unknown, index: number): Idea {
   };
 }
 
+/**
+ * Models occasionally wrap the plan inside an envelope key such as
+ * `{ plan: {...} }` or `{ data: {...} }`. Unwrap one level when the root
+ * object does not itself look like a plan.
+ */
+function unwrapEnvelope(raw: unknown): Record<string, unknown> {
+  const root = isRecord(raw) ? raw : {};
+  const looksLikePlan = (value: Record<string, unknown>) =>
+    ["budget", "timeline", "checklist", "ideas"].filter((key) => key in value).length >= 2;
+  if (looksLikePlan(root)) return root;
+  for (const value of Object.values(root)) {
+    if (isRecord(value) && looksLikePlan(value)) return value;
+  }
+  return root;
+}
+
 function flattenTips(value: unknown): string[] {
   return asArray(value)
     .map((entry) => {
@@ -161,13 +177,16 @@ function flattenTips(value: unknown): string[] {
 
 /** Repair arbitrary model output into a schema-valid EventPlan. */
 export function normalizeAiPlan(raw: unknown, brief: EventBrief): EventPlan {
-  const candidate = isRecord(raw) ? raw : {};
+  const candidate = unwrapEnvelope(raw);
   const demo = buildDemoPlan(brief);
   const eventDate = brief.eventDate;
 
   const rawBudget = isRecord(candidate.budget) ? candidate.budget : {};
-  const categories = asArray(rawBudget.categories).map(normalizeCategory).filter((c) => c.estimatedAmount > 0);
-  const safeCategories = categories.length >= 4 ? categories : demo.budget.categories;
+  const categories = asArray(rawBudget.categories)
+    .map(normalizeCategory)
+    .filter((c) => c.estimatedAmount > 0);
+  const usedBudget = categories.length >= 4;
+  const safeCategories = usedBudget ? categories : demo.budget.categories;
 
   const contingency = asNonNegativeNumber(rawBudget.contingencyAmount, demo.budget.contingencyAmount);
   const subtotal = safeCategories.reduce((sum, category) => sum + category.estimatedAmount, 0);
@@ -186,18 +205,34 @@ export function normalizeAiPlan(raw: unknown, brief: EventBrief): EventPlan {
   const timeline = asArray(candidate.timeline).map((entry, index) =>
     normalizeMilestone(entry, index, eventDate),
   );
-  const safeTimeline = timeline.length >= 5 ? timeline : demo.timeline;
+  const usedTimeline = timeline.length >= 5;
+  const safeTimeline = usedTimeline
+    ? timeline
+    : enrichMilestones(demo.timeline, eventDate);
 
   const checklist = asArray(candidate.checklist).map((entry, index) =>
     normalizeTask(entry, index, eventDate),
   );
-  const safeChecklist = checklist.length >= 8 ? checklist : demo.checklist;
+  const usedChecklist = checklist.length >= 8;
+  const safeChecklist = usedChecklist
+    ? checklist
+    : enrichTasks(demo.checklist, eventDate);
 
   const ideas = asArray(candidate.ideas).map(normalizeIdea);
-  const safeIdeas = ideas.length >= 4 ? ideas : demo.ideas;
+  const usedIdeas = ideas.length >= 4;
+  const safeIdeas = usedIdeas ? ideas : demo.ideas;
 
   const riskTips = flattenTips(candidate.riskTips);
-  const safeRiskTips = riskTips.length >= 3 ? riskTips : demo.riskTips;
+  const usedTips = riskTips.length >= 3;
+  const safeRiskTips = usedTips ? riskTips : demo.riskTips;
+
+  // Honest labelling: if the model contributed no usable section, surface the
+  // failure so the service retries and ultimately returns labelled demo data.
+  const anyModelSectionUsed =
+    usedBudget || usedTimeline || usedChecklist || usedIdeas || usedTips;
+  if (!anyModelSectionUsed) {
+    throw new Error("Model payload contained no usable plan sections.");
+  }
 
   const repaired = {
     source: "gemini" as const,
@@ -219,7 +254,13 @@ export function normalizeAiPlan(raw: unknown, brief: EventBrief): EventPlan {
 
 /** Tolerant parse for the ideas endpoint. */
 export function normalizeIdeasReply(raw: unknown, brief: EventBrief) {
-  const candidate = isRecord(raw) ? raw : {};
+  let candidate = isRecord(raw) ? raw : {};
+  if (!Array.isArray(candidate.ideas)) {
+    const nested = Object.values(candidate).find(
+      (value) => isRecord(value) && Array.isArray(value.ideas),
+    );
+    if (isRecord(nested)) candidate = nested;
+  }
   const ideas = asArray(candidate.ideas).map(normalizeIdea);
   const safeIdeas = ideas.length >= 3 ? ideas : buildDemoPlan(brief).ideas;
   return ideasReplySchema.parse({ ideas: safeIdeas });

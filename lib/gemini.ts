@@ -58,7 +58,16 @@ export async function generateJson<T>({
   if (!text) {
     throw new Error("Gemini returned an empty response.");
   }
-  return JSON.parse(text) as T;
+  return parseModelJson(text) as T;
+}
+
+/** Tolerant JSON parse: strip accidental markdown fences some models emit. */
+function parseModelJson(text: string): unknown {
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  return JSON.parse(cleaned);
 }
 
 interface TextCallArgs {

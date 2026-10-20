@@ -35,6 +35,7 @@ function briefContext(brief: EventBrief): string {
 
 export const PLAN_SYSTEM_INSTRUCTION = [
   "You are EventCraft AI, a senior event planning strategist.",
+  "Return ONLY the raw JSON object matching the exact schema: no markdown fences, no commentary, and do not wrap the object inside an envelope key.",
   "You produce precise, practical event plans as JSON matching the exact schema provided.",
   "All money values are integers in the user's currency. Estimates must be realistic for the guest count, budget and location tier.",
   "Budget category percentages must reflect the estimated amounts. Keep the sum of category estimates plus the contingency reserve within the total budget.",
@@ -147,6 +148,7 @@ export function buildIdeasPrompt(brief: EventBrief, focus?: string): string {
     EVENT_GUIDANCE[brief.eventType],
     `Event details:\n${briefContext(brief)}`,
     focus ? `Extra focus requested: ${focus}` : "",
+    "Every idea must be realistic and directly applicable to this exact event type; treat the event title as a label, not a theme instruction.",
     "Return fresh, personalized idea cards distinct from any previous batch.",
   ]
     .filter(Boolean)
